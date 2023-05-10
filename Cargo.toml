@@ -1,2 +1,2 @@
 [workspace]
-members = ["memreader", "trgt"]
+members = ["memreader", "trgt", "interceptor"]

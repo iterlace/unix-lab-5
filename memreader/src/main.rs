@@ -8,7 +8,7 @@ use std::os::unix::raw::off_t;
 use std::process::Command;
 use std::str::FromStr;
 
-use libc::{lseek, pread64};
+use libc::{lseek, pread64, read, lseek64};
 
 const PAGE_SIZE: usize = 4096;
 
@@ -87,6 +87,7 @@ fn read_proc_mem(pid: i32) -> io::Result<Vec<u8>> {
         let mut offset: i64 = mapping.addr_start as i64;
         while offset < mapping.addr_end as i64 {
             let mut page_buffer = [0u8; PAGE_SIZE];
+            // Can possibly be replaced with lseek + read
             let bytes_read: i64 = unsafe {
                 pread64(
                     file.as_raw_fd(),
