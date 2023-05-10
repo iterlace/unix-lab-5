@@ -18,39 +18,40 @@ struct Mapping {
     addr_end: usize,
     file_path: String,
     perms: String,
-    inode_id: u64
+    inode_id: u64,
 }
 
 
-fn parse_mapping(line: &str) -> Result<Mapping, io::Error> {
-    let mut parts: Vec<&str> = line.split_whitespace().collect();
-    if parts.len() != 6 {
-        println!("line: {:?}", parts);
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid line length"));
-    };
-    let addr_parts: Vec<&str> = parts[0].split("-").collect();
-    if addr_parts.len() != 2 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid addr"));
+impl Mapping {
+    fn parse_str(line: &str) -> Result<Mapping, io::Error> {
+        let mut parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() != 6 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid line length"));
+        };
+        let addr_parts: Vec<&str> = parts[0].split("-").collect();
+        if addr_parts.len() != 2 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid addr"));
+        }
+        let addr_start = usize::from_str_radix(addr_parts[0], 16)
+            .map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidData, "invalid addr_start")
+            })?;
+
+        let addr_end = usize::from_str_radix(addr_parts[1], 16)
+            .map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidData, "invalid addr_end")
+            })?;
+
+        Ok(Mapping {
+            addr_start,
+            addr_end,
+            file_path: String::from(parts[5]),
+            perms: String::from(parts[1]),
+            inode_id: u64::from_str(parts[4]).map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidData, "invalid inode_id")
+            })?,
+        })
     }
-    let addr_start = usize::from_str_radix(addr_parts[0], 16)
-        .map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidData, "invalid addr_start")
-        })?;
-
-    let addr_end = usize::from_str_radix(addr_parts[1], 16)
-        .map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidData, "invalid addr_end")
-        })?;
-
-    Ok(Mapping {
-        addr_start,
-        addr_end,
-        file_path: String::from(parts[5]),
-        perms: String::from(parts[1]),
-        inode_id: u64::from_str(parts[4]).map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidData, "invalid inode_id")
-        })?,
-    })
 }
 
 
@@ -64,7 +65,7 @@ fn read_proc_mem(pid: i32) -> io::Result<Vec<u8>> {
     let mut memory_buffer = Vec::new();
 
     for line in maps_buffer.lines() {
-        let mapping = match parse_mapping(line) {
+        let mapping = match Mapping::parse_str(line) {
             Ok(m) => m,
             Err(e) => {
                 eprintln!("Error processing line: {}", e.to_string());
@@ -73,11 +74,11 @@ fn read_proc_mem(pid: i32) -> io::Result<Vec<u8>> {
         };
         if !mapping.perms.contains("r") {
             // ignore non-readable memory mappings
-            continue
+            continue;
         }
         if mapping.inode_id != 0 {
             // ignore all files
-            continue
+            continue;
         }
 
         memory_buffer.extend_from_slice(&*format!("\0New segment: {}\0", mapping.file_path).into_bytes());
@@ -91,7 +92,7 @@ fn read_proc_mem(pid: i32) -> io::Result<Vec<u8>> {
                     file.as_raw_fd(),
                     page_buffer.as_mut_ptr() as *mut c_void,
                     PAGE_SIZE,
-                    offset as i64
+                    offset as i64,
                 ).try_into().unwrap()
             };
             if bytes_read <= 0 {
@@ -116,17 +117,19 @@ fn main() -> io::Result<()> {
 
     match read_proc_mem(pid) {
         Ok(mem) => {
-            println!("Process {} used {} bytes of memory", pid, mem.len());
+            let filepath = format!("/tmp/memdump_{}", pid);
+            println!("Process {} used {} bytes of RAM", pid, mem.len());
+            println!("Saving memory dump to {}", filepath);
+
             let mut file = File::options()
                 .read(true)
                 .write(true)
                 .create(true)
-                .open(format!("/tmp/memdump_{}", pid))?;
+                .open(filepath)?;
             file.write(mem.as_slice()).unwrap();
         }
         Err(e) => eprintln!("Error reading process memory: {}", e),
     }
-
 
     Ok(())
 }
