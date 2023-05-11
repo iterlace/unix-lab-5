@@ -8,15 +8,13 @@ use std::ptr::null_mut;
 
 use libc;
 use libc::c_uint;
-use libc::keycode_to_unicode;
 
 fn main() -> io::Result<()> {
     let kb = detect_keyboard()?;
     let fd = open_keyboard_device(&*kb)?;
     loop {
         let mut event = read_keyboard_event(fd)?;
-        // Intercept keyboard events here
-        println!("got event: value={:?}; type={:?}, code={:?}; resolved={:?}", event.value, event.type_, event.code, resolve_keypress(event.code as u32));
+        println!("got event: value={:?}; type={:?}, code={:?}", event.value, event.type_, event.code);
     }
 }
 
@@ -48,10 +46,4 @@ fn read_keyboard_event(fd: RawFd) -> io::Result<libc::input_event> {
 fn detect_keyboard() -> Result<String, io::Error> {
     println!("Provide a path for your keyboard device: ");
     return Ok("/dev/input/by-id/usb-SteelSeries_SteelSeries_Apex_100_Gaming_Keyboard-event-kbd".to_string());
-}
-
-fn resolve_keypress(code: u32) -> char {
-    let utf8 = std::char::from_u32(unsafe { libc::key(code, 0) as u32 })
-        .unwrap();
-    utf8
 }
