@@ -11,7 +11,7 @@ use libc::c_uint;
 
 fn main() -> io::Result<()> {
     let kb = detect_keyboard()?;
-    let fd = open_keyboard_device(&*kb)?;
+    let fd = open_keyboard_device(kb.as_str())?;
     loop {
         let mut event = read_keyboard_event(fd)?;
         println!("got event: value={:?}; type={:?}, code={:?}", event.value, event.type_, event.code);
@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
 }
 
 fn open_keyboard_device(path: &str) -> io::Result<RawFd> {
-    let fd = unsafe { libc::open(path.as_ptr() as *const i8, libc::O_RDONLY) };
+    let fd = unsafe { libc::open(path.as_ptr() as *const c_char, libc::O_RDONLY) };
     if fd < 0 {
         Err(io::Error::last_os_error())
     } else {
